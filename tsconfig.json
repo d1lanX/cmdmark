@@ -1,0 +1,20 @@
+{
+	"compilerOptions": {
+		"target": "esnext",
+		"lib": ["esnext"],
+		"module": "nodenext",
+		"moduleResolution": "nodenext",
+		"strict": true,
+		"noEmit": true,
+		"allowImportingTsExtensions": true,
+		"erasableSyntaxOnly": true,
+		"verbatimModuleSyntax": true,
+		"skipLibCheck": true,
+		"types": ["bun", "node"]
+	},
+	"include": [
+		"packages/protocol/**/*.ts",
+		"packages/daemon/**/*.ts",
+		"packages/cli/**/*.ts"
+	]
+}

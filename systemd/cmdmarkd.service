@@ -1,0 +1,13 @@
+[Unit]
+Description=cmdmark command and process manager daemon
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/cmdmark daemon --foreground
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target

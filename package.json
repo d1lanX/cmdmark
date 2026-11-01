@@ -1,0 +1,25 @@
+{
+	"name": "cmdmark",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"engines": {
+		"bun": ">=1.4.0"
+	},
+	"workspaces": ["packages/*"],
+	"scripts": {
+		"start": "cd packages/gui && bun run start",
+		"test": "bun test",
+		"test:ui": "cd packages/gui && bun run test:ui",
+		"typecheck": "tsc --noEmit -p tsconfig.json && cd packages/gui && tsc --noEmit -p tsconfig.json && svelte-check --tsconfig tsconfig.json --diagnostic-sources js,svelte --fail-on-warnings",
+		"build": "bun run build:cli && bun run build:gui",
+		"build:cli": "cd packages/cli && bun run build",
+		"build:gui": "cd packages/gui && bun run build"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.4.3",
+		"@types/node": "^26.6.5",
+		"svelte-check": "^4.7.6",
+		"typescript": "^5.9.3"
+	}
+}
