@@ -1,0 +1,13 @@
+{
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		"customConditions": ["custom-renderer", "development"],
+		"types": ["bun", "node", "gpuix-svelte/html"],
+		"paths": {
+			"svelte": ["../../node_modules/gpuix-svelte/node_modules/svelte"],
+			"svelte/*": ["../../node_modules/gpuix-svelte/node_modules/svelte/*"]
+		}
+	},
+	"svelteOptions": { "namespace": "gpuixHTML" },
+	"include": ["**/*.ts", "**/*.svelte"]
+}

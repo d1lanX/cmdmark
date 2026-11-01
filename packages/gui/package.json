@@ -1,0 +1,16 @@
+{
+	"name": "@cmdmark/gui",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"scripts": {
+		"start": "gpuix-svelte --bun app.ts",
+		"test:headless": "gpuix-svelte --bun test.ts",
+		"test:ui": "gpuix-svelte --bun test/ui-smoke.ts",
+		"build": "bun build.ts"
+	},
+	"dependencies": {
+		"@cmdmark/protocol": "workspace:*",
+		"gpuix-svelte": "^0.3.0"
+	}
+}
