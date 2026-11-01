@@ -1,0 +1,14 @@
+{
+	"name": "@cmdmark/cli",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"scripts": {
+		"start": "bun src/main.ts",
+		"build": "bun build.ts"
+	},
+	"dependencies": {
+		"@cmdmark/daemon": "workspace:*",
+		"@cmdmark/protocol": "workspace:*"
+	}
+}
