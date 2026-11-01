@@ -1,5 +1,5 @@
 import { createWriteStream } from 'node:fs';
-import { mkdir, open, stat } from 'node:fs/promises';
+import { mkdir, open, stat, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { WriteStream } from 'node:fs';
@@ -207,6 +207,31 @@ export class ProcessSupervisor {
 		return this.backend.list();
 	}
 
+	async deleteRun(runId: string): Promise<boolean> {
+		const run = this.#requireRun(runId);
+		if (run.endedAt === null || this.backend.list().some((process) => process.runId === runId)) {
+			throw new Error('stop the run before deleting its history');
+		}
+		const active = this.#active.get(runId);
+		if (active) await active.logClosed;
+		await removeLogFile(run.logPath);
+		return this.store.deleteRun(runId);
+	}
+
+	async clearHistory(): Promise<{ deletedRunIds: string[]; failedRunIds: string[] }> {
+		const candidates = this.store.listRuns().filter((run) => run.endedAt !== null);
+		const deletedRunIds: string[] = [];
+		const failedRunIds: string[] = [];
+		for (const run of candidates) {
+			try {
+				if (await this.deleteRun(run.runId)) deletedRunIds.push(run.runId);
+			} catch {
+				failedRunIds.push(run.runId);
+			}
+		}
+		return { deletedRunIds, failedRunIds };
+	}
+
 	async readLogs(runId: string, offset?: number, limit = this.bufferSizeBytes): Promise<LogRead> {
 		const run = this.#requireRun(runId);
 		const maxBytes = Math.max(0, Math.min(MAX_LOG_READ_BYTES, Math.trunc(limit)));
@@ -374,6 +399,15 @@ async function readLogFile(path: string, requestedOffset: number | undefined, li
 		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
 			return { data: Buffer.alloc(0), offset: requestedOffset ?? 0, nextOffset: requestedOffset ?? 0, truncated: false };
 		}
+		throw error;
+	}
+}
+
+async function removeLogFile(path: string): Promise<void> {
+	try {
+		await unlink(path);
+	} catch (error) {
+		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return;
 		throw error;
 	}
 }

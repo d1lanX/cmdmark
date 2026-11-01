@@ -90,6 +90,25 @@ describe('ProcessSupervisor', () => {
 		expect(restarted.commandId).toBe(bookmark.id);
 		await supervisor.stop(second.runId, 300);
 	});
+
+	test('clears completed run history and refuses to delete active processes', async () => {
+		const completed = await supervisor.start({ resolvedCommand: 'printf history', shell: '/bin/sh' });
+		await waitForRun(store, completed.runId, (run) => run.endedAt !== null);
+		const active = await supervisor.start({ resolvedCommand: 'sleep 100', shell: '/bin/sh' });
+
+		await expect(supervisor.deleteRun(active.runId)).rejects.toThrow('stop the run before deleting its history');
+		const cleared = await supervisor.clearHistory();
+		expect(cleared.deletedRunIds).toEqual([completed.runId]);
+		expect(cleared.failedRunIds).toEqual([]);
+		expect(store.getRun(completed.runId)).toBeNull();
+		expect(await Bun.file(completed.logPath).exists()).toBe(false);
+		expect(store.getRun(active.runId)).not.toBeNull();
+
+		await supervisor.stop(active.runId, 300);
+		expect(await supervisor.deleteRun(active.runId)).toBe(true);
+		expect(store.getRun(active.runId)).toBeNull();
+		expect(await Bun.file(active.logPath).exists()).toBe(false);
+	});
 });
 
 async function waitForRun(

@@ -17,6 +17,7 @@
         onTag: (tag: string | null) => void;
         onSelect: (id: string) => void;
         onRun: (command: CommandRecord) => void;
+        onOpenTerminal: (command: CommandRecord) => void;
         onEdit: (command: CommandRecord) => void;
         onDuplicate: (command: CommandRecord) => void;
         onDelete: (command: CommandRecord) => void;
@@ -33,13 +34,18 @@
         onTag,
         onSelect,
         onRun,
+        onOpenTerminal,
         onEdit,
         onDuplicate,
         onDelete,
         onFavorite
     }: Props = $props();
     const rowNodes = new SvelteMap<string, ShadowNode>();
-    const cursor = $derived(Math.max(0, commands.findIndex((command) => command.id === selectedId)));
+    const cardRows = $derived.by(() => {
+        const rows: CommandRecord[][] = [];
+        for (let index = 0; index < commands.length; index += 2) rows.push(commands.slice(index, index + 2));
+        return rows;
+    });
 
     function attachRow(id: string) {
         return (node: ShadowNode) => {
@@ -55,9 +61,9 @@
             onRun(command);
             return;
         }
-        if (event.key !== 'arrowdown' && event.key !== 'arrowup') return;
+        if (event.key !== 'arrowdown' && event.key !== 'arrowup' && event.key !== 'arrowleft' && event.key !== 'arrowright') return;
         event.preventDefault();
-        const delta = event.key === 'arrowdown' ? 1 : -1;
+        const delta = event.key === 'arrowdown' ? 2 : event.key === 'arrowup' ? -2 : event.key === 'arrowright' ? 1 : -1;
         const nextIndex = Math.max(0, Math.min(commands.length - 1, currentIndex + delta));
         const next = commands[nextIndex];
         if (next) {
@@ -109,42 +115,45 @@
             <text class="empty-copy">Save a repeatable command, or start with the quick-run strip above.</text>
         </div>
     {:else}
-        <Scroller virtual estimate={96} pad="2px 10px 8px 0" testid="commands-scroll">
-            {#each commands as command (command.id)}
-                <div class="row-wrap" style="width: 100%">
-                    <div
-                        {@attach attachRow(command.id)}
-                        class={['command-row', { selected: selectedId === command.id }]}
-                        testId={`command-${command.id}`}
-                        role="option"
-                        aria-selected={selectedId === command.id}
-                        tabindex={selectedId === command.id || (!selectedId && command === commands[0]) ? 0 : -1}
-                        hitbox="self"
-                        onclick={() => onSelect(command.id)}
-                        onkeydown={(event) => handleRowKey(event, command)}
-                    >
-                        <div class="row-copy">
-                            <div class="name-line">
-                                <text class="command-name">{command.name}</text>
-                                {#if command.favorite}<text class="favorite-marker">★</text>{/if}
-                                {#if command.useCount > 0}<text class="use-count">used {command.useCount}×</text>{/if}
-                            </div>
-                            {#if command.description}<text class="description">{command.description}</text>{/if}
-                            <text class="command-code">{command.command}</text>
-                            {#if command.tags.length > 0}
-                                <div class="row-tags">
-                                    {#each command.tags.slice(0, 4) as tag (tag)}<text class="row-tag">{tag}</text>{/each}
+        <Scroller virtual estimate={250} pad="2px 10px 8px 0" testid="commands-scroll">
+            {#each cardRows as row, rowIndex (`${row[0]?.id ?? rowIndex}`)}
+                <div class="card-grid-row" style="width: 100%">
+                    {#each row as command (command.id)}
+                        <div
+                            {@attach attachRow(command.id)}
+                            class={['command-card', { selected: selectedId === command.id }]}
+                            testId={`command-${command.id}`}
+                            role="option"
+                            aria-selected={selectedId === command.id}
+                            tabindex={selectedId === command.id || (!selectedId && command === commands[0]) ? 0 : -1}
+                            hitbox="self"
+                            onclick={() => onSelect(command.id)}
+                            onkeydown={(event) => handleRowKey(event, command)}
+                        >
+                            <div class="card-copy">
+                                <div class="name-line">
+                                    <text class="command-name">{command.name}</text>
+                                    {#if command.favorite}<text class="favorite-marker">★</text>{/if}
+                                    {#if command.useCount > 0}<text class="use-count">used {command.useCount}×</text>{/if}
                                 </div>
-                            {/if}
+                                {#if command.description}<text class="description">{command.description}</text>{/if}
+                                <text class="command-code">{command.command}</text>
+                                {#if command.tags.length > 0}
+                                    <div class="row-tags">
+                                        {#each command.tags.slice(0, 4) as tag (tag)}<text class="row-tag">{tag}</text>{/each}
+                                    </div>
+                                {/if}
+                            </div>
+                            <div class="card-actions">
+                                <ActionButton label="Run" kind="primary" compact onclick={() => onRun(command)} testId={`run-${command.id}`} />
+                                <ActionButton label="Terminal" kind="outline" compact onclick={() => onOpenTerminal(command)} testId={`terminal-${command.id}`} />
+                                <ActionButton label={command.favorite ? '★' : '☆'} ariaLabel={command.favorite ? 'Remove favorite' : 'Add favorite'} compact onclick={() => onFavorite(command)} />
+                                <ActionButton label="Edit" compact onclick={() => onEdit(command)} />
+                                <ActionButton label="Copy" compact onclick={() => onDuplicate(command)} />
+                                <ActionButton label="Delete" kind="danger" compact onclick={() => onDelete(command)} />
+                            </div>
                         </div>
-                        <div class="row-actions">
-                            <ActionButton label="Run" kind="primary" compact onclick={() => onRun(command)} testId={`run-${command.id}`} />
-                            <ActionButton label={command.favorite ? '★' : '☆'} ariaLabel={command.favorite ? 'Remove favorite' : 'Add favorite'} compact onclick={() => onFavorite(command)} />
-                            <ActionButton label="Edit" compact onclick={() => onEdit(command)} />
-                            <ActionButton label="Copy" compact onclick={() => onDuplicate(command)} />
-                            <ActionButton label="Delete" kind="danger" compact onclick={() => onDelete(command)} />
-                        </div>
-                    </div>
+                    {/each}
                 </div>
             {/each}
         </Scroller>
@@ -166,21 +175,21 @@
     .tag-chip:hover { background-color: var(--surface-hover); color: var(--ink); }
     .tag-chip:focus-visible { outline-width: 2px; outline-color: var(--focus); outline-offset: 1px; }
     .tag-chip.active { background-color: var(--surface-deep); color: var(--ink); font-weight: 700; }
-    .row-wrap { width: 100%; padding: 4px 0; }
-    .command-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-height: 82px; padding: 14px 14px 14px 17px; border-radius: 6px; background-color: var(--paper); cursor: default; }
-    .command-row:hover { background-color: var(--surface-hover); }
-    .command-row.selected { background-color: var(--selected); }
-    .command-row:focus-visible { outline-width: 2px; outline-color: var(--focus); outline-offset: 1px; }
-    .row-copy { display: flex; flex-direction: column; gap: 5px; min-width: 0; flex-grow: 1; }
+    .card-grid-row { display: grid; grid-template-columns: 2; align-items: stretch; gap: 12px; width: 100%; padding: 4px 0; }
+    .command-card { display: flex; flex-direction: column; justify-content: space-between; gap: 16px; min-width: 0; min-height: 182px; padding: 15px; border-width: 1px; border-color: var(--line); border-style: solid; border-radius: 7px; background-color: var(--paper); cursor: default; }
+    .command-card:hover { background-color: var(--surface-hover); border-color: var(--line-strong); }
+    .command-card.selected { background-color: var(--selected); border-color: var(--accent); }
+    .command-card:focus-visible { outline-width: 2px; outline-color: var(--focus); outline-offset: 1px; }
+    .card-copy { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex-grow: 1; }
     .name-line { display: flex; flex-direction: row; align-items: center; gap: 8px; }
     .command-name { color: var(--ink); font-size: 15px; font-weight: 700; }
     .favorite-marker { color: var(--accent); font-size: 13px; }
     .use-count { color: var(--ink-faint); font-size: 10px; }
     .description { color: var(--ink-muted); font-size: 12px; }
-    .command-code { color: var(--code-ink); font-family: monospace; font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+    .command-code { color: var(--code-ink); font-family: monospace; font-size: 12px; white-space: normal; }
     .row-tags { display: flex; flex-direction: row; flex-wrap: wrap; gap: 5px; }
     .row-tag { padding: 2px 6px; border-radius: 3px; background-color: var(--surface-deep); color: var(--ink-muted); font-size: 10px; }
-    .row-actions { display: flex; flex-direction: row; align-items: center; gap: 3px; flex-shrink: 0; }
+    .card-actions { display: flex; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 3px; row-gap: 6px; padding-top: 10px; border-top-width: 1px; border-color: var(--line); }
     .empty-state { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex-grow: 1; justify-content: center; padding: 26px; }
     .empty-kicker { color: var(--accent); font-size: 10px; font-weight: 800; }
     .empty-title { color: var(--ink); font-size: 22px; font-weight: 700; }

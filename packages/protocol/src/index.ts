@@ -98,6 +98,8 @@ export interface RpcParams {
 	'commands.import': { commands: CommandDraft[] };
 	'runs.list': { state?: RunState };
 	'runs.get': { runId: string };
+	'runs.delete': { runId: string };
+	'runs.clearHistory': Record<string, never>;
 	'runs.start': {
 		commandId?: string;
 		command?: string;
@@ -136,6 +138,8 @@ export interface RpcResults {
 	'commands.import': { commands: CommandRecord[]; risks: ImportRisk[] };
 	'runs.list': { runs: RunRecord[] };
 	'runs.get': { run: RunRecord | null };
+	'runs.delete': { deleted: boolean };
+	'runs.clearHistory': { deletedRunIds: string[]; failedRunIds: string[] };
 	'runs.start': { run: RunRecord };
 	'runs.stop': { run: RunRecord };
 	'runs.signal': { run: RunRecord };
@@ -196,6 +200,12 @@ export interface RunOutputNotification {
 	params: { runId: string; offset: number; dataBase64: string };
 }
 
+export interface RunsDeletedNotification {
+	jsonrpc: '2.0';
+	method: 'runs.deleted';
+	params: { runIds: string[] };
+}
+
 export interface CommandsChangedNotification {
 	jsonrpc: '2.0';
 	method: 'commands.changed';
@@ -211,6 +221,7 @@ export interface SettingsChangedNotification {
 export type RpcNotification =
 	| RunStateNotification
 	| RunOutputNotification
+	| RunsDeletedNotification
 	| CommandsChangedNotification
 	| SettingsChangedNotification;
 
@@ -231,6 +242,8 @@ export const RPC_METHODS = [
 	'commands.import',
 	'runs.list',
 	'runs.get',
+	'runs.delete',
+	'runs.clearHistory',
 	'runs.start',
 	'runs.stop',
 	'runs.signal',
@@ -250,6 +263,7 @@ const RPC_METHOD_SET: ReadonlySet<string> = new Set(RPC_METHODS);
 const NOTIFICATION_METHODS: ReadonlySet<string> = new Set([
 	'run.state',
 	'run.output',
+	'runs.deleted',
 	'commands.changed',
 	'settings.changed'
 ]);
@@ -297,7 +311,10 @@ function validParams(method: RpcMethod, params: Record<string, unknown>): boolea
 		case 'runs.list':
 			return params.state === undefined || isRunState(params.state);
 		case 'runs.get':
+		case 'runs.delete':
 			return hasString('runId');
+		case 'runs.clearHistory':
+			return true;
 		case 'runs.start':
 			return optionalString('commandId') && optionalString('command') && optionalString('name') &&
 				optionalNullableString('cwd') && optionalString('shell') &&
@@ -353,6 +370,8 @@ function validNotificationParams(method: string, params: Record<string, unknown>
 		case 'run.output':
 			return typeof params.runId === 'string' && numberIsInteger(params.offset) &&
 				typeof params.dataBase64 === 'string' && isBase64(params.dataBase64);
+		case 'runs.deleted':
+			return Array.isArray(params.runIds) && params.runIds.every((runId) => typeof runId === 'string');
 		case 'commands.changed':
 			return typeof params.commandId === 'string' && ['created', 'updated', 'deleted'].includes(String(params.change));
 		case 'settings.changed':

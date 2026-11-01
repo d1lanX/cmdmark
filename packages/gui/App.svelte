@@ -25,6 +25,7 @@
         queued: Array<{ offset: number; dataBase64: string }>;
         subscriptionId: string | null;
     }
+    type RunDeleteTarget = { kind: 'run'; run: RunRecord } | { kind: 'history' };
 
     const PALETTE = {
         shell: '#202925',
@@ -89,7 +90,9 @@
     let editingCommand = $state<CommandRecord | null>(null);
     let editorInitialCommand = $state('');
     let deleteTarget = $state<CommandRecord | null>(null);
+    let runDeleteTarget = $state<RunDeleteTarget | null>(null);
     let promptCommand = $state<CommandRecord | null>(null);
+    let promptToTerminal = $state(false);
     let importPreview = $state<{ commands: CommandDraft[]; risks: ImportRisk[] } | null>(null);
     let logRun = $state<RunRecord | null>(null);
     let logLines = $state<string[]>([]);
@@ -117,6 +120,8 @@
                 settings = notification.params.settings;
             } else if (notification.method === 'run.state') {
                 upsertRun(notification.params.run);
+            } else if (notification.method === 'runs.deleted') {
+                handleRunsDeleted(notification.params.runIds);
             } else if (notification.method === 'run.output') {
                 consumeLogOutput(notification);
             }
@@ -149,6 +154,7 @@
                 else if (importPreview) importPreview = null;
                 else if (editorOpen) editorOpen = false;
                 else if (deleteTarget) deleteTarget = null;
+                else if (runDeleteTarget) runDeleteTarget = null;
                 else if (view === 'logs') { void closeLogSession(); view = 'runs'; }
                 return;
             }
@@ -211,6 +217,21 @@
         runs = [run, ...runs.filter((candidate) => candidate.runId !== run.runId)]
             .sort((left, right) => right.startedAt - left.startedAt);
         if (logRun?.runId === run.runId) logRun = run;
+    }
+
+    function handleRunsDeleted(runIds: string[]): void {
+        const deleted = new Set(runIds);
+        runs = runs.filter((run) => !deleted.has(run.runId));
+        if (!logRun || !deleted.has(logRun.runId)) return;
+        const session = logSessions.get(logRun.runId);
+        if (session?.subscriptionId && client) {
+            void client.request('runs.unsubscribe', { subscriptionId: session.subscriptionId }).catch(() => {});
+        }
+        session?.stream.finish();
+        logSessions.delete(logRun.runId);
+        logRun = null;
+        logLines = [];
+        view = 'runs';
     }
 
     function consumeLogOutput(notification: Extract<RpcNotification, { method: 'run.output' }>): void;
@@ -308,16 +329,53 @@
         }
     }
 
+    async function confirmRunDelete(): Promise<void> {
+        if (!client || !runDeleteTarget) return;
+        const target = runDeleteTarget;
+        try {
+            if (target.kind === 'run') {
+                const result = await client.request('runs.delete', { runId: target.run.runId });
+                if (result.deleted) showToast('Run and saved logs deleted');
+            } else {
+                const result = await client.request('runs.clearHistory', {});
+                if (result.deletedRunIds.length > 0) {
+                    const count = result.deletedRunIds.length;
+                    showToast(`Deleted ${count} completed ${count === 1 ? 'run' : 'runs'}`);
+                } else {
+                    showToast('No completed run history to delete');
+                }
+                if (result.failedRunIds.length > 0) {
+                    showError(`Could not delete ${result.failedRunIds.length} run log ${result.failedRunIds.length === 1 ? 'file' : 'files'}.`);
+                }
+            }
+        } catch (caught) {
+            showError(caught);
+        } finally {
+            runDeleteTarget = null;
+        }
+    }
+
     function runBookmark(command: CommandRecord): void {
         const variables = templateVariables(command.command, command.params);
         if (variables.length > 0) {
+            promptToTerminal = false;
             promptCommand = command;
             return;
         }
         void startBookmark(command, command.command).catch(showError);
     }
 
-    async function startBookmark(command: CommandRecord, templateCommand: string, values: Record<string, string> = {}): Promise<void> {
+    function runBookmarkInTerminal(command: CommandRecord): void {
+        const variables = templateVariables(command.command, command.params);
+        if (variables.length > 0) {
+            promptToTerminal = true;
+            promptCommand = command;
+            return;
+        }
+        void startBookmark(command, command.command, {}, true).catch(showError);
+    }
+
+    async function startBookmark(command: CommandRecord, templateCommand: string, values: Record<string, string> = {}, toTerminal = false): Promise<void> {
         if (!client) throw new Error(connectionError ?? 'cmdmarkd is unavailable');
         const resolvedCommand = resolveTemplate(templateCommand, values, command.params);
         const { run } = await client.request('runs.start', {
@@ -329,7 +387,18 @@
         });
         upsertRun(run);
         promptCommand = null;
+        promptToTerminal = false;
         navigate('runs');
+        if (toTerminal) {
+            try {
+                await launchTerminal(run.runId, settings.terminal);
+                showToast(`Started ${command.name} in a terminal`);
+                return;
+            } catch (caught) {
+                showError(caught);
+                return;
+            }
+        }
         showToast(`Started ${command.name}`);
     }
 
@@ -545,6 +614,7 @@
                 onTag={(tag) => (selectedTag = tag)}
                 onSelect={(id) => (selectedCommandId = id)}
                 onRun={runBookmark}
+                onOpenTerminal={runBookmarkInTerminal}
                 onEdit={(command) => startEditing(command)}
                 onDuplicate={duplicateCommand}
                 onDelete={(command) => (deleteTarget = command)}
@@ -560,6 +630,8 @@
                 onSignal={(run, signal) => void signalRun(run, signal)}
                 onLogs={(run) => void openLogs(run)}
                 onAttach={(run) => void openTerminal(run)}
+                onDelete={(run) => (runDeleteTarget = { kind: 'run', run })}
+                onClearHistory={() => (runDeleteTarget = { kind: 'history' })}
             />
         {:else if view === 'settings'}
             <SettingsView {settings} onSave={saveSettings} onExport={exportBookmarks} onImport={reviewImport} />
@@ -574,7 +646,7 @@
 {/if}
 
 {#if promptCommand}
-    <ParameterPrompt command={promptCommand} onRun={(resolved) => startBookmark(promptCommand!, resolved)} onClose={() => (promptCommand = null)} />
+    <ParameterPrompt command={promptCommand} onRun={(resolved) => startBookmark(promptCommand!, resolved, {}, promptToTerminal)} onClose={() => { promptCommand = null; promptToTerminal = false; }} />
 {/if}
 
 {#if deleteTarget}
@@ -583,6 +655,26 @@
         <div class="confirm-actions">
             <ActionButton label="Cancel" kind="outline" onclick={() => (deleteTarget = null)} />
             <ActionButton label="Delete bookmark" kind="danger" onclick={() => void confirmDelete()} />
+        </div>
+    </Modal>
+{/if}
+
+{#if runDeleteTarget}
+    <Modal
+        title={runDeleteTarget.kind === 'history' ? 'Clear completed run history?' : 'Delete this run?'}
+        eyebrow="REMOVE SAVED HISTORY"
+        onClose={() => (runDeleteTarget = null)}
+        width={500}
+        height={300}
+    >
+        {#if runDeleteTarget.kind === 'history'}
+            <text class="confirm-copy">This permanently removes all completed run records and their saved logs. Active or paused runs are kept and will continue running.</text>
+        {:else}
+            <text class="confirm-copy">This permanently removes “{runDeleteTarget.run.resolvedCommand}” and its saved log. Its bookmark is not affected.</text>
+        {/if}
+        <div class="confirm-actions">
+            <ActionButton label="Cancel" kind="outline" onclick={() => (runDeleteTarget = null)} />
+            <ActionButton label={runDeleteTarget.kind === 'history' ? 'Clear history' : 'Delete run'} kind="danger" onclick={() => void confirmRunDelete()} testId="confirm-run-delete" />
         </div>
     </Modal>
 {/if}

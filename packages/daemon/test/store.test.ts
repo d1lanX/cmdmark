@@ -63,6 +63,17 @@ describe('CommandStore', () => {
 		expect(store.getRun(run.runId)).toMatchObject({ state: 'lost', endedAt: 500 });
 	});
 
+	test('deletes a selected run record without affecting neighboring history', () => {
+		store = new CommandStore();
+		const first = store.createRun({ resolvedCommand: 'echo first', logPath: '/logs/first.log', state: 'exited', startedAt: 1 });
+		const second = store.createRun({ resolvedCommand: 'echo second', logPath: '/logs/second.log', state: 'exited', startedAt: 2 });
+
+		expect(store.deleteRun(first.runId)).toBe(true);
+		expect(store.deleteRun(first.runId)).toBe(false);
+		expect(store.getRun(first.runId)).toBeNull();
+		expect(store.getRun(second.runId)?.resolvedCommand).toBe('echo second');
+	});
+
 	test('validates required fields, environment names, and unique parameter names', () => {
 		store = new CommandStore();
 		expect(() => store!.createCommand({ name: '', command: 'echo ok' })).toThrow('name is required');

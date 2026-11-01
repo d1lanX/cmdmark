@@ -8,6 +8,7 @@
 		"./client": "./src/client.ts",
 		"./autostart": "./src/autostart.ts",
 		"./template": "./src/template.ts",
-		"./bookmarks": "./src/bookmarks.ts"
+		"./bookmarks": "./src/bookmarks.ts",
+		"./terminal": "./src/terminal.ts"
 	}
 }

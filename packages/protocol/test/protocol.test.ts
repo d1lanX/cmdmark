@@ -14,6 +14,7 @@ describe('JSON-RPC protocol', () => {
 
 	test('accepts typed notifications and responses', () => {
 		expect(isRpcNotification({ jsonrpc: '2.0', method: 'run.output', params: { runId: 'r1', offset: 0, dataBase64: 'b2s=' } })).toBe(true);
+		expect(isRpcNotification({ jsonrpc: '2.0', method: 'runs.deleted', params: { runIds: ['r1'] } })).toBe(true);
 		expect(isRpcResponse({ jsonrpc: '2.0', id: 'x', result: { version: '0.1.0', pid: 42 } })).toBe(true);
 	});
 

@@ -1,9 +1,9 @@
 import { basename } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { runDaemon } from '@cmdmark/daemon';
-import { RpcClient, decodeOutput } from '@cmdmark/protocol/client';
+import { RpcClient, RpcClientError, decodeOutput } from '@cmdmark/protocol/client';
 import { connectOrStartDaemon, defaultDaemonLaunchSpec, spawnDaemonProcess } from '@cmdmark/protocol/autostart';
-import type { RpcNotification, RunRecord } from '@cmdmark/protocol';
+import type { RpcNotification, RpcResults, RunRecord } from '@cmdmark/protocol';
 import { resolveTemplate, templateVariables } from '@cmdmark/protocol/template';
 
 const DETACH_KEY = 'ctrl-]';
@@ -223,7 +223,20 @@ async function attach(client: RpcClient, runId: string | undefined): Promise<voi
 	const onInterrupt = () => finish();
 
 	try {
-		const attached = await client.request('runs.attach', { runId, cols, rows });
+		let attached: RpcResults['runs.attach'];
+		try {
+			attached = await client.request('runs.attach', { runId, cols, rows });
+		} catch (error) {
+			if (error instanceof RpcClientError && error.code === -32009) {
+				const { run } = await client.request('runs.get', { runId });
+				if (run && run.endedAt !== null) {
+					const logs = await client.request('runs.logs', { runId, offset: 0, limit: 1024 * 1024 });
+					process.stdout.write(decodeOutput(logs.dataBase64));
+					return;
+				}
+			}
+			throw error;
+		}
 		const initial = decodeOutput(attached.initialOutputBase64);
 		process.stdout.write(initial);
 		cursor = attached.offset + initial.length;

@@ -45,6 +45,8 @@ an attach ownership conflict.
 | `commands.import` | validated command drafts | atomically created bookmarks and risk matches; never starts commands |
 | `runs.list` | optional state | run records |
 | `runs.get` | `runId` | run or null |
+| `runs.delete` | `runId` | delete one completed run and its saved log; active runs are rejected |
+| `runs.clearHistory` | `{}` | delete completed run history and logs; active runs are preserved |
 | `runs.start` | command ID or ad-hoc command; optional shell/cwd/env/params | new run |
 | `runs.stop` | `runId`, optional grace period | stopped/escalated run |
 | `runs.signal` | `runId`, signal | updated run |
@@ -62,6 +64,7 @@ an attach ownership conflict.
 ## Notifications
 
 - `run.state`: a `RunRecord` after a state/process change.
+- `runs.deleted`: the IDs of removed runs, broadcast to connected clients.
 - `run.output`: `{runId, offset, dataBase64}`. `offset` is the absolute byte offset in the append-only
   log; notification data may split UTF-8 sequences, so consumers should decode incrementally.
 - `commands.changed`: command ID and `created | updated | deleted`.

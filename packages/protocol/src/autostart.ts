@@ -15,20 +15,26 @@ export interface ConnectOrStartOptions {
 }
 
 export function defaultDaemonLaunchSpec(sourceEntry?: string): DaemonLaunchSpec {
+	const cli = defaultCliLaunchSpec(sourceEntry);
+	return { ...cli, args: [...cli.args, 'daemon', '--foreground'] };
+}
+
+/** The same executable/source entry, without the daemon subcommand. */
+export function defaultCliLaunchSpec(sourceEntry?: string): DaemonLaunchSpec {
 	const configured = process.env.CMDMARK_BIN;
-	if (configured) return { command: configured, args: ['daemon', '--foreground'] };
+	if (configured) return { command: configured, args: [] };
 
 	const candidate = sourceEntry ?? process.argv[1];
 	const runtimeName = basename(process.execPath).toLocaleLowerCase();
 	const runningOnBunRuntime = runtimeName === 'bun' || runtimeName === 'bun.exe';
 	if (runningOnBunRuntime && candidate && /\.(?:ts|[cm]?js)$/.test(candidate) && existsSync(candidate)) {
-		return { command: process.execPath, args: [candidate, 'daemon', '--foreground'], cwd: process.cwd() };
+		return { command: process.execPath, args: [candidate], cwd: process.cwd() };
 	}
 
 	const sibling = join(dirname(process.execPath), 'cmdmark');
-	if (existsSync(sibling)) return { command: sibling, args: ['daemon', '--foreground'] };
-	if (basename(process.execPath) === 'cmdmark') return { command: process.execPath, args: ['daemon', '--foreground'] };
-	return { command: 'cmdmark', args: ['daemon', '--foreground'] };
+	if (existsSync(sibling)) return { command: sibling, args: [] };
+	if (basename(process.execPath) === 'cmdmark') return { command: process.execPath, args: [] };
+	return { command: 'cmdmark', args: [] };
 }
 
 export function spawnDaemonProcess(spec: DaemonLaunchSpec): Promise<void> {

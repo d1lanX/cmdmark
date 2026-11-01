@@ -43,8 +43,10 @@ cmdmark attach <run_id>
 ```
 
 `cmdmark attach` connects to the run's PTY from the caller's terminal. The default detach sequence
-is Ctrl-]; detaching never stops the process. The GUI's “Open in terminal” launches this CLI in an
-installed terminal emulator.
+is Ctrl-]; detaching never stops the process. In the GUI, **Terminal** on a Library bookmark starts
+it and opens the attach session; **Terminal** on an active run attaches to that existing session.
+The selected or detected terminal emulator is used (including Terminator). If a short command
+finishes before its terminal attaches, the terminal displays its saved output instead.
 
 ## Runtime files
 

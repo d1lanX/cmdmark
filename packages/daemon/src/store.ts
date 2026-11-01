@@ -278,6 +278,10 @@ export class CommandStore {
 		return this.db.query<RunRow, []>('SELECT * FROM runs ORDER BY started_at DESC').all().map(runFromRow);
 	}
 
+	deleteRun(runId: string): boolean {
+		return this.db.query('DELETE FROM runs WHERE run_id = ?').run(runId).changes > 0;
+	}
+
 	updateRun(runId: string, patch: RunPatch): RunRecord {
 		const current = this.getRun(runId);
 		if (!current) throw new Error(`run not found: ${runId}`);

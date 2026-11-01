@@ -114,6 +114,46 @@ describe('DaemonSocketServer', () => {
 		await second.request('runs.detach', { runId: started.run.runId });
 		await second.request('runs.stop', { runId: started.run.runId, gracePeriodMs: 100 });
 	});
+
+	test('deletes one completed run or clears completed history, never active runs', async () => {
+		const notifications: RpcNotification[] = [];
+		const unsubscribe = second.onNotification((notification) => notifications.push(notification));
+		const completed = await first.request('runs.start', { command: 'printf "delete me"', shell: '/bin/sh' });
+		await waitUntil(async () => {
+			const { run } = await first.request('runs.get', { runId: completed.run.runId });
+			return run && run.endedAt !== null ? run : undefined;
+		}, 'run to delete did not finish');
+
+		const deleted = await first.request('runs.delete', { runId: completed.run.runId });
+		expect(deleted.deleted).toBe(true);
+		expect((await first.request('runs.get', { runId: completed.run.runId })).run).toBeNull();
+		await waitUntil(() => notifications.some((notification) =>
+			notification.method === 'runs.deleted' && notification.params.runIds.includes(completed.run.runId)
+		) ? true : undefined, 'run deletion notification was not broadcast');
+
+		const active = await first.request('runs.start', { command: 'sleep 100', shell: '/bin/sh' });
+		let activeDeleteError: unknown;
+		try {
+			await first.request('runs.delete', { runId: active.run.runId });
+		} catch (error) {
+			activeDeleteError = error;
+		}
+		expect(activeDeleteError).toBeInstanceOf(RpcClientError);
+		expect((activeDeleteError as RpcClientError | undefined)?.code).toBe(-32009);
+		await first.request('runs.stop', { runId: active.run.runId, gracePeriodMs: 100 });
+
+		const other = await first.request('runs.start', { command: 'printf "clear me"', shell: '/bin/sh' });
+		await waitUntil(async () => {
+			const { run } = await first.request('runs.get', { runId: other.run.runId });
+			return run && run.endedAt !== null ? run : undefined;
+		}, 'run to clear did not finish');
+		const cleared = await first.request('runs.clearHistory', {});
+		expect(cleared.deletedRunIds).toContain(active.run.runId);
+		expect(cleared.deletedRunIds).toContain(other.run.runId);
+		expect(cleared.failedRunIds).toEqual([]);
+		expect((await first.request('runs.list', {})).runs).toHaveLength(0);
+		unsubscribe();
+	});
 });
 
 async function waitForOutput(notifications: RpcNotification[], runId: string, text: string): Promise<string> {

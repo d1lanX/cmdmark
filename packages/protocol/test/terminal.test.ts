@@ -21,6 +21,13 @@ describe('terminal emulator selection', () => {
 			.toEqual(['-e', 'cmdmark', 'attach', 'r1']);
 		expect(terminalArguments({ executable: 'xdg-terminal-exec', args: [], kind: 'xdg' }, 'cmdmark', ['attach', 'r1']))
 			.toEqual(['cmdmark', 'attach', 'r1']);
+		expect(terminalArguments({ executable: 'terminator', args: [], kind: 'dash-x' }, 'cmdmark', ['attach', 'r1']))
+			.toEqual(['-x', 'cmdmark', 'attach', 'r1']);
+	});
+
+	test('resolves terminator to its argv-rest form', () => {
+		expect(resolveTerminalCommand('terminator', undefined, (name: string) => (name === 'terminator' ? '/usr/bin/terminator' : null)))
+			.toEqual({ executable: '/usr/bin/terminator', args: [], kind: 'dash-x' });
 	});
 
 	test('parses a configured terminal command without invoking a shell', () => {

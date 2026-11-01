@@ -35,6 +35,9 @@ try {
 		return result.hits[0]?.command;
 	}, 'command editor did not save the bookmark');
 	assert.ok(command);
+	await app.getByTestId(`command-${command.id}`).bounds();
+	await app.getByTestId(`run-${command.id}`).waitFor({ timeoutMs: 5000 });
+	await app.getByTestId(`terminal-${command.id}`).bounds();
 	await app.getByTestId(`run-${command.id}`).click();
 	const run = await waitFor(async () => {
 		const result = await client!.request('runs.list', {});
@@ -69,6 +72,21 @@ try {
 	assert.equal(imported.name, 'Imported cleanup');
 	assert.equal((await client.request('runs.list', {})).runs.length, 1);
 
+	const heldClient = client!;
+	const held = await heldClient.request('runs.start', { command: 'sleep 6', shell: '/bin/sh' });
+	await waitFor(async () => {
+		const result = await heldClient.request('runs.get', { runId: held.run.runId });
+		return result.run && result.run.endedAt === null ? result.run : undefined;
+	}, 'held run did not start');
+	await app.getByTestId('runs-navigation').click();
+	await waitFor(async () => {
+		try {
+			return await app!.getByText('Terminal').bounds();
+		} catch {
+			return undefined;
+		}
+	}, 'active-run Terminal button is not painted');
+
 	const followed = await client.request('runs.start', { command: 'seq 1 100', shell: '/bin/sh' });
 	await waitFor(async () => {
 		const result = await client!.request('runs.get', { runId: followed.run.runId });
@@ -80,6 +98,32 @@ try {
 	await wheelFollow((index) => view.getByTestId(`log-line-${index}`), 600, 'Follow output', 'wheel-up did not disable tail following');
 	await view.getByTestId('log-line-70').waitFor({ timeoutMs: 5000 });
 	await wheelFollow((index) => view.getByTestId(`log-line-${index}`), -10000, 'Following tail', 'wheel-down did not re-enable tail following');
+
+	await client.request('runs.stop', { runId: held.run.runId, gracePeriodMs: 200 });
+	const singleDelete = await client.request('runs.start', { command: 'printf "delete this run\\n"', shell: '/bin/sh' });
+	await waitFor(async () => {
+		const result = await client!.request('runs.get', { runId: singleDelete.run.runId });
+		return result.run && result.run.endedAt !== null ? result.run : undefined;
+	}, 'single-delete run did not finish');
+	await view.getByTestId('runs-navigation').click();
+	await view.getByTestId(`delete-run-${singleDelete.run.runId}`).waitFor({ timeoutMs: 5000 });
+	await view.getByTestId(`delete-run-${singleDelete.run.runId}`).click();
+	await view.getByTestId('confirm-run-delete').waitFor({ timeoutMs: 5000 });
+	await view.getByTestId('confirm-run-delete').click();
+	await waitFor(async () => {
+		const result = await client!.request('runs.get', { runId: singleDelete.run.runId });
+		return result.run === null ? true : undefined;
+	}, 'single run was not deleted');
+	assert.equal(await Bun.file(singleDelete.run.logPath).exists(), false);
+
+	await view.getByTestId('clear-run-history').waitFor({ timeoutMs: 5000 });
+	await view.getByTestId('clear-run-history').click();
+	await view.getByTestId('confirm-run-delete').waitFor({ timeoutMs: 5000 });
+	await view.getByTestId('confirm-run-delete').click();
+	await waitFor(async () => {
+		const result = await client!.request('runs.list', {});
+		return result.runs.length === 0 ? result.runs : undefined;
+	}, 'completed run history was not cleared');
 
 	console.log(JSON.stringify({ platform: process.platform, bun: Bun.version, command: command.name, imported: imported.name, follow: 'PASS', runState: (await client.request('runs.get', { runId: run.runId })).run?.state, ui: 'PASS' }));
 } finally {

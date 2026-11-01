@@ -215,6 +215,23 @@ export class DaemonSocketServer {
 				return { runs: this.store.listRuns(request.params.state) };
 			case 'runs.get':
 				return { run: this.store.getRun(request.params.runId) };
+			case 'runs.delete': {
+				const run = this.store.getRun(request.params.runId);
+				if (!run) throw new RpcDispatchError(-32004, `run not found: ${request.params.runId}`);
+				if (run.endedAt === null || this.supervisor.listProcesses().some((process) => process.runId === run.runId)) {
+					throw new RpcDispatchError(-32009, 'stop the run before deleting its history');
+				}
+				const deleted = await this.supervisor.deleteRun(request.params.runId);
+				if (deleted) this.#broadcast({ jsonrpc: '2.0', method: 'runs.deleted', params: { runIds: [request.params.runId] } });
+				return { deleted };
+			}
+			case 'runs.clearHistory': {
+				const result = await this.supervisor.clearHistory();
+				if (result.deletedRunIds.length > 0) {
+					this.#broadcast({ jsonrpc: '2.0', method: 'runs.deleted', params: { runIds: result.deletedRunIds } });
+				}
+				return result;
+			}
 			case 'runs.start': {
 				const bookmarked = request.params.commandId ? this.store.getCommand(request.params.commandId) : null;
 				if (request.params.commandId && !bookmarked) throw new RpcDispatchError(-32004, `command not found: ${request.params.commandId}`);

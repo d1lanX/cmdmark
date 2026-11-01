@@ -49,21 +49,23 @@
             <ActionButton label="Close logs" compact onclick={onClose} />
         </div>
     </div>
-    <virtual-list
-        {@attach (node: ShadowNode) => (listNode = node)}
-        class="log-list"
-        testId="log-list"
-        estimatedItemHeight={24}
-        alignment="bottom"
-        onvisiblerange={visibleRange}
-    >
-        {#each lines as line, index (`${index}-${line}`)}
-            <div class="log-row" style="width: 100%" testId={`log-line-${index}`}>
-                <text class="line-number">{String(index + 1).padStart(4, '0')}</text>
-                <text class="log-line">{line || ' '}</text>
-            </div>
-        {/each}
-    </virtual-list>
+    <div class="log-surface">
+        <virtual-list
+            {@attach (node: ShadowNode) => (listNode = node)}
+            class="log-list"
+            testId="log-list"
+            estimatedItemHeight={24}
+            alignment="bottom"
+            onvisiblerange={visibleRange}
+        >
+            {#each lines as line, index (`${index}-${line}`)}
+                <div class="log-row" style="width: 100%" testId={`log-line-${index}`}>
+                    <text class="line-number">{String(index + 1).padStart(4, '0')}</text>
+                    <text class="log-line">{line || ' '}</text>
+                </div>
+            {/each}
+        </virtual-list>
+    </div>
 </div>
 
 <style>
@@ -74,8 +76,9 @@
     .log-title { color: var(--ink); font-family: monospace; font-size: 14px; white-space: nowrap; text-overflow: ellipsis; }
     .log-meta { color: var(--ink-muted); font-size: 11px; }
     .log-tools { display: flex; flex-direction: row; align-items: center; gap: 6px; flex-shrink: 0; }
-    .log-list { display: flex; flex-direction: column; flex-grow: 1; min-height: 0; width: 100%; padding: 8px; border-radius: 6px; background-color: var(--log-surface); color: var(--log-ink); overflow-y: scroll; scrollbar-color: var(--scroller-thumb); scrollbar-width: 7px; }
-    .log-row { display: flex; flex-direction: row; align-items: start; gap: 12px; width: 100%; min-height: 24px; padding: 3px 4px; }
+    .log-surface { display: flex; flex-direction: column; flex-grow: 1; min-height: 0; width: 100%; border-radius: 6px; background-color: var(--log-surface); color: var(--log-ink); }
+    .log-list { display: flex; flex-direction: column; flex-grow: 1; min-height: 0; width: 100%; padding: 8px; overflow-y: scroll; scrollbar-color: var(--scroller-thumb); scrollbar-width: 7px; }
+    .log-row { display: flex; flex-direction: row; align-items: start; gap: 12px; width: 100%; min-height: 24px; padding: 3px 4px; color: var(--log-ink); }
     .line-number { width: 38px; flex-shrink: 0; color: var(--log-muted); font-family: monospace; font-size: 11px; text-align: right; }
     .log-line { flex-grow: 1; color: var(--log-ink); font-family: monospace; font-size: 12px; white-space: normal; }
 </style>
