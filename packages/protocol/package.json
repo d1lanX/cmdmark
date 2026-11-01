@@ -1,0 +1,13 @@
+{
+	"name": "@cmdmark/protocol",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./client": "./src/client.ts",
+		"./autostart": "./src/autostart.ts",
+		"./template": "./src/template.ts",
+		"./bookmarks": "./src/bookmarks.ts"
+	}
+}
