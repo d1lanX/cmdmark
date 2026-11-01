@@ -1,0 +1,15 @@
+{
+	"name": "@cmdmark/daemon",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"test": "bun test"
+	},
+	"dependencies": {
+		"@cmdmark/protocol": "workspace:*"
+	}
+}
